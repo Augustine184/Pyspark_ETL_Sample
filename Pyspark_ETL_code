@@ -1,0 +1,100 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+spark = SparkSession.builder.appName('test').getOrCreate()
+df=spark.read.option('header','true').option('inferSchema','false').csv('Sample.csv')
+#df.show(truncate=False)
+#df.printSchema()
+
+#df.agg(count('*').alias('Counter')).show()
+
+# remove complete null values
+df=df.dropna(how='all')
+#df.agg(count('*').alias('Counter')).show()
+
+#remove duplicates
+df=df.drop_duplicates()
+#df.show()
+#df.agg(count('*').alias('Counter')).show()
+
+#correct data type in age and casting
+df_age=df.withColumn(
+    'AGE',
+    when(col('AGE').rlike('^[0-9]+$'),col('AGE').cast('int')).otherwise(None)
+)
+#df_age.show()
+
+#correct data type in SALARY and casting
+df_salary=df_age.withColumn(
+    'SALARY',
+    when(col('SALARY').rlike('^[0-9]+$'),col('SALARY').cast('int')).otherwise(None)
+)
+
+#correct Hire_date and same format
+df_hire = df_salary.withColumn(
+    "HIRE_DATE",
+    when(
+        col("HIRE_DATE").rlike("^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$"),
+        to_date(col("HIRE_DATE"), "dd/MM/yyyy")
+    ).otherwise(None)
+)
+
+#df_hire.show()
+
+df_name = df_hire.withColumn(
+    'NAME',
+    when(
+        col('NAME').rlike('^[A-Za-z ]+$'), col('NAME')
+    ).when(
+        ~col('NAME').rlike('[A-Za-z ]+$'),'Unknown'
+    ).when(
+        col('NAME').isNull(), 'Unknown'
+    )
+)
+#df_name.show()
+
+df_id = df_name.withColumn(
+    'EMPLOYEE_ID',
+    when(
+        col('EMPLOYEE_ID').rlike('^[0-9]+$'),col('EMPLOYEE_ID').cast('int')
+    ).otherwise(None)
+)
+df_id.show()
+df_id.printSchema()
+
+average_salary = df_id.select(avg('SALARY')).collect()[0][0]
+
+df_full_salary = df_id.withColumn(
+    'SALARY',
+    when(
+        col('SALARY').isNull(),average_salary
+    ).otherwise(col('SALARY'))
+)
+df_depart = df_full_salary.withColumn(
+    'DEPARTMENT',
+    when(
+        col('DEPARTMENT').isNull(),'Unknown'
+    ).otherwise(col('DEPARTMENT'))
+)
+df_depart.show()
+
+median_age = df_depart.filter(col('AGE').isNotNull()) \
+.selectExpr('percentile_approx(AGE,0.5)') \
+.collect()[0][0]
+
+df_new_age = df_depart.withColumn(
+    'AGE',
+    when(
+        col('AGE').isNull(), median_age
+    ).otherwise(col('AGE'))
+)
+
+df_new_age.show()
+
+df_date_lit = df_new_age.withColumn(
+    'HIRE_DATE',
+    when(
+        col('HIRE_DATE').isNull(),trunc(current_date(), 'YEAR').cast(DateType())
+    ).otherwise(col('HIRE_DATE'))
+)
+df_date_lit.show()
