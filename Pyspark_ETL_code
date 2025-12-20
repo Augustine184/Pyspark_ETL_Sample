@@ -98,3 +98,7 @@ df_date_lit = df_new_age.withColumn(
     ).otherwise(col('HIRE_DATE'))
 )
 df_date_lit.show()
+
+df_date_lit.write \
+    .mode("overwrite") \
+    .parquet("file:///E:/AIMore Tech SQL files/Project/cleaned_parquet")
