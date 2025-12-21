@@ -1,0 +1,101 @@
+import sys
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from pyspark.context import SparkContext
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+
+## @params: [JOB_NAME]
+args = getResolvedOptions(sys.argv, ['JOB_NAME'])
+
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args['JOB_NAME'], args)
+
+employees = spark.read \
+    .option("header", "true") \
+    .option("inferSchema", "false") \
+    .csv("s3://input-bucket-vendor/files/employees_unclean.csv")
+    
+# remove fully null rows
+employees = employees.dropna(how='all')
+
+# remove duplicates
+employees = employees.dropDuplicates()
+
+# fix emp_id
+df_emp_id = employees.withColumn(
+    "emp_id",
+    when(col("emp_id").rlike("^[0-9]+$"), col("emp_id").cast(IntegerType()))
+    .otherwise(None)
+)
+
+# clean name
+df_name = df_emp_id.withColumn(
+    "name",
+    when(trim(col("name")).rlike("^[A-Za-z ]+$"), col("name"))
+    .otherwise("Unknown")
+)
+
+# clean age
+df_age = df_name.withColumn(
+    "age",
+    when(col("age").rlike("^[0-9]+$"), col("age").cast(IntegerType()))
+    .otherwise(None)
+)
+
+# median age
+median_age = df_age.filter(col("age").isNotNull()) \
+    .selectExpr("percentile_approx(age, 0.5)") \
+    .collect()[0][0]
+
+df_new_age = df_age.withColumn(
+    "age",
+    when(col("age").isNull(), median_age).otherwise(col("age"))
+)
+
+# department
+df_department = df_new_age.withColumn(
+    "department",
+    when(trim(col("department")).rlike("^[A-Za-z ]+$"), col("department"))
+    .otherwise("Unknown")
+)
+
+# salary
+df_salary = df_department.withColumn(
+    "salary",
+    when(col("salary").rlike("^[0-9]+$"), col("salary").cast(IntegerType()))
+    .otherwise(None)
+)
+
+avg_salary = df_salary.agg(avg("salary")).collect()[0][0]
+
+df_new_salary = df_salary.na.fill({"salary": avg_salary})
+
+# joining date (FIXED MM bug)
+df_joining = df_new_salary.withColumn(
+    'joining_date',
+    coalesce(
+        to_date(expr("try_to_timestamp(nullif(joining_date, ''), 'yyyy-MM-dd')")),
+        to_date(expr("try_to_timestamp(nullif(joining_date, ''), 'yyyy/MM/dd')")),
+        trunc(current_date(), 'year')
+    )
+)
+# email
+df_email = df_joining.withColumn(
+    "email",
+    when(lower(col("email")).rlike("^[a-z0-9._]+@gmail\\.com$"), col("email"))
+    .otherwise("Unknown")
+)
+
+df_email.write \
+    .mode("overwrite") \
+    .option("header", "true") \
+    .csv("s3://final-output-cleaned/final/")
+
+job.commit()
