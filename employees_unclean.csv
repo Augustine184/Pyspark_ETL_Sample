@@ -1,0 +1,13 @@
+emp_id,name,age,department,salary,joining_date,email
+101,John Doe,29,IT,55000,2021-05-12,john.doe@gmail.com
+102, ,34,HR,48000,12/06/2020,hr_user@company
+103,Alice Smith,,Finance,65000,2020-11-01,alice.smith@company.com
+104,Bob,45,IT,,2019-03-18,bob@@gmail.com
+105,Charlie Brown,27,Sales,42000,2018/07/25,charlie.brown@gmail.com
+106,David Lee,29,IT,55000,2021-05-12,john.doe@gmail.com
+107,Eva Green,NaN,HR,50000,2022-01-10,eva.green@company.com
+108,Frank,38,,70000,2021-13-01,frank@company.com
+109,Gina, 31 ,Finance,62000,2020-08-09,
+110,Hari,28,IT,not_available,2021-09-15,hari@gmail.com
+111,Isha Patel,26,Sales,45000,2022-02-30,isha.patel@gmail.com
+112,John Doe,29,IT,55000,2021-05-12,john.doe@gmail.com
