@@ -1,0 +1,158 @@
+#reading the file
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.appName('new').getOrCreate()
+orders = spark.read.option('header',True).csv('orders_raw.csv')
+orders.show(truncate=False)
+orders.printSchema()
+
+#Make the customer_info to string 
+from pyspark.sql.functions import regexp_replace, col
+df_1 = orders.withColumn(
+    'customer_info',
+    regexp_replace('customer_info',r'(\w+):', r'"$1":')
+)
+
+df_2 = df_1.withColumn(
+    'customer_info',
+    regexp_replace('customer_info', r':([a-zA-Z @.]+)([,}])', r':"$1"$2')
+)
+df_2.show(truncate=False)
+df_2.printSchema()
+
+#create schema for orders and parse to json using from_json()
+from pyspark.sql.functions import regexp_replace, col, from_json
+from pyspark.sql.types import StructType, StructField, StringType
+
+customer_schema = StructType([
+    StructField('name',StringType()),
+    StructField('email', StringType()),
+    StructField('location',StructType([
+        StructField('city',StringType()),
+        StructField('state',StringType())
+    ]))
+])
+
+df_3 = df_2.withColumn(
+    'customer_struct',
+    from_json(col('customer_info'), customer_schema)
+)
+df_3.show(truncate=False)
+df_3.printSchema()
+
+# final customer
+from pyspark.sql.functions import regexp_replace, col, from_json
+
+df_3.show()
+df_3.select('customer_struct.location.state').show(truncate=False)
+
+customer_final = df_3.select(
+    'order_id',
+    col('customer_struct.name').alias('name'),
+    col('customer_struct.email').alias('email'),
+    col('customer_struct.location.city').alias('city'),
+    col('customer_struct.location.state').alias('state')
+)
+customer_final.show(truncate=False)
+
+#Product column to string
+from pyspark.sql.functions import regexp_replace, col
+df_product_1 = orders.withColumn(
+    'product_info',
+    regexp_replace('product_info', r'(\w+):', r'"$1":')
+)
+df_product_2 = df_product_1.withColumn(
+    'product_info',
+    regexp_replace('product_info', r':([a-zA-Z 0-9]+)([,}])', r':"$1"$2')
+)
+
+df_product_2.show(truncate=False)
+
+# create schema with arraytype and struct for products. Apply parse to array struct
+
+from pyspark.sql.functions import col, from_json
+from pyspark.sql.types import StructField, StructType, StringType, IntegerType, ArrayType
+
+product_schema = ArrayType(StructType([
+    StructField('product_id', StringType()),
+    StructField('product_name', StringType()),
+    StructField('price',StringType())
+])
+)
+
+df_product_3 = df_product_2.withColumn(
+    'product_array',
+    from_json(col('product_info'), product_schema)
+)
+
+df_product_3.show(truncate=False)
+df_product_3.printSchema()
+
+# apply explode due to multiple product
+from pyspark.sql.functions import explode
+
+
+df_product_4 = df_product_3.select(
+    "order_id",
+    explode("product_array").alias("product")
+)
+df_product_4.show()
+
+final_products = df_product_4.select(
+    "order_id",
+    col("product.product_id"),
+    col("product.product_name"),
+    col("product.price").cast(IntegerType()).alias('price')
+)
+final_products.show(truncate=False)
+
+#Make payment to string
+
+from pyspark.sql.functions import *
+
+
+
+df_payment_1 = orders.withColumn(
+    'payment_info',
+    regexp_replace('payment_info',r'(\w+):',r'"$1":')
+)
+df_payment_2 = df_payment_1.withColumn(
+    'payment_info',
+    regexp_replace('payment_info',r':([a-zA-Z]+)',r':"$1"')
+)
+
+df_payment_2.show(truncate=False)
+
+#apply schema with from_json
+
+from pyspark.sql.types import StructField, StructType, StructType
+from pyspark.sql.functions import *
+
+payment_schema = StructType([
+    StructField('method',StringType()),
+    StructField('status', StringType())
+])
+
+df_payment_json = df_payment_2.withColumn(
+    'payment_struct',
+    from_json('payment_info', payment_schema)
+)
+df_payment_json.show(truncate=False)
+
+final_payment = df_payment_json.select(
+    'order_id',
+    col('payment_struct.method'),
+    col('payment_struct.status')
+)
+final_payment.show(truncate=False)
+
+#final table
+customer_final.show()
+final_products.show()
+final_payment.show()
+
+final_df = customer_final.alias("c") \
+    .join(final_products.alias("p"), "order_id", "inner") \
+    .join(final_payment.alias("pay"), "order_id", "inner")
+
+final_df.show()
+
