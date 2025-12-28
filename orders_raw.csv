@@ -1,0 +1,4 @@
+order_id,customer_info,product_info,payment_info,order_timestamp
+1001,"{name:John Doe,email:john@gmail.com,location:{city:NY,state:NY}}","[{product_id:P101,product_name:Laptop,price:800},{product_id:P102,product_name:Mouse,price:20}]","{method:CreditCard,status:Success}",2024-07-01 10:15:00
+1002,"{name:Jane Smith,email:jane@yahoo.com,location:{city:LA,state:CA}}","[{product_id:P103,product_name:Phone,price:600}]","{method:UPI,status:Success}",2024-07-01 11:30:00
+1003,"{name:Mike Brown,email:mike@outlook.com,location:{city:Dallas,state:TX}}","[{product_id:P104,product_name:Tablet,price:300},{product_id:P105,product_name:Keyboard,price:50}]","{method:DebitCard,status:Failed}",2024-07-01 12:45:00
