@@ -1,0 +1,46 @@
+[
+  {
+    "student_id": "101",
+    "name": " Alice ",
+    "age": "21",
+    "marks": {
+      "math": "85",
+      "physics": 90,
+      "history": null
+    },
+    "email": "alice@example.com",
+    "enrolled_date": "2024-01-15"
+  },
+  {
+    "student_id": 102,
+    "name": "bob",
+    "age": null,
+    "marks": {
+      "math": "N/A",
+      "physics": "88",
+      "history": "70"
+    },
+    "email": "bobexample.com",
+    "enrolled_date": "15-01-2024"
+  },
+  {
+    "student_id": "101",
+    "name": "Alice",
+    "age": "21",
+    "marks": {
+      "math": "85",
+      "physics": 90,
+      "history": null
+    },
+    "email": "alice@example.com",
+    "enrolled_date": "2024-01-15"
+  },
+  {
+    "student_id": null,
+    "name": "   ",
+    "age": "twenty",
+    "marks": null,
+    "email": null,
+    "enrolled_date": null
+  }
+]
