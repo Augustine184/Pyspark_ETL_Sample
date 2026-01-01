@@ -1,0 +1,91 @@
+from os import truncate
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+spark = SparkSession.builder.appName('new').getOrCreate()
+df = spark.read.option('multiLine',True).json('student_dirty_data.json')
+print('Printing schema')
+df.printSchema()
+print('Raw / Brown data')
+df.show(truncate=False)
+
+
+print('cleaning the age & casting')
+df_age = df.withColumn(
+    'age',
+    when(col('age').rlike(r'(\d+)'), col('age').cast(IntegerType()))\
+    .otherwise(None)
+)
+df_age.show(truncate=False)
+df_age.printSchema()
+
+print('Cleaning the email')
+
+df_email = df_age.withColumn(
+    'email',
+    when(col('email').rlike(r'([a-zA-Z.]+@[\w.]+)'), col('email'))\
+    .otherwise(None)
+)
+
+df_email.show(truncate=False)
+df_email.printSchema()
+
+print('Cleaning the date column & casting to date')
+
+df_date = df_email.withColumn(
+    "enrolled_date",
+    coalesce(
+        try_to_timestamp(col("enrolled_date"), lit("yyyy-MM-dd")),
+        try_to_timestamp(col("enrolled_date"), lit("dd-MM-yyyy")),
+        try_to_timestamp(col("enrolled_date"), lit("dd/MM/yyyy"))
+    ).cast("date")
+)
+df_date.show(truncate=False)
+df_date.printSchema()
+
+print('cleaning the student_id')
+
+df_id = df_date.withColumn(
+    'student_id',
+    when(col('student_id').rlike(r'(\d+)'), col('student_id').cast(IntegerType()))\
+    .otherwise(None)
+)
+df_id.show(truncate=False)
+df_id.printSchema()
+
+print('Cleaning the name')
+df_name = df_id.withColumn(
+    'name',
+    when(trim(col('name')).rlike(r'^([\w]+)$'),trim(col('name')))\
+    .otherwise(None)
+)
+df_name.show(truncate=False)
+
+print('Removed duplicates')
+df_dedup = df_name.dropDuplicates(['student_id', 'email'])
+df_dedup.show(truncate=False)
+
+print('remove all null columns')
+df_last = df_dedup.dropna(how='all')
+df_last.show(truncate=False)
+
+
+print('Make marks struct Flat')
+
+df_marks = df_last.select(
+    '*',
+    col('marks.history').alias('History').cast('int'),
+    col('marks.math').alias('Maths'),
+    col('marks.physics').alias('Physics').cast('int')
+).drop('marks')
+df_marks.show(truncate=False)
+
+print('Cleaning the Maths')
+
+df_maths = df_marks.withColumn(
+    'Maths',
+    when(col('Maths').rlike(r'(^\d+$)'), col('Maths').cast('int'))\
+    .otherwise(None)
+)
+df_maths.show(truncate=False)
+df_maths.printSchema()
