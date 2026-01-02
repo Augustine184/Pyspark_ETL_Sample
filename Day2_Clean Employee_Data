@@ -1,0 +1,94 @@
+from logging import FATAL
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+from pyspark.sql.window import Window
+spark = SparkSession.builder.appName('test').getOrCreate()
+employees = spark.read.option('header',True).option('nullValue','').csv('employee_dirty_data.csv')
+
+print('Reading and printing the bad employee data')
+employees.show(truncate=False)
+employees.printSchema()
+
+print('Cleaning emp_id')
+df_id = employees.withColumn(
+    'emp_id',
+    when(col('emp_id').rlike(r'(^\d+$)'), col('emp_id').cast(IntegerType()))\
+    .otherwise(None)
+)
+df_id.show(truncate=False)
+df_id.printSchema()
+
+print('Cleaning the name')
+
+df_name = df_id.withColumn(
+    'name',
+    when(trim(col('name')).rlike(r'^[a-zA-Z]+( [a-zA-Z]+)*$'), trim(col('name')))\
+    .otherwise(None)
+)
+df_name.show(truncate=False)
+
+print('Cleaning the age')
+df_age = df_name.withColumn(
+    'age',
+    when(col('age').rlike(r'^[0-9]{1,3}$'), col('age').cast('int'))\
+    .otherwise(None)
+)
+df_age.show(truncate=False)
+df_age.printSchema()
+
+print('Cleaning the email')
+df_email = df_age.withColumn(
+    'email',
+    when(trim(col('email')).rlike(r'^[a-zA-Z.0-9]+@[a-z.]+$'), trim(col('email')))\
+    .otherwise(None)
+)
+df_email.show(truncate=False)
+
+print('Cleaning the date')
+df_date = df_email.withColumn(
+    'joining_date',
+    coalesce(
+        try_to_timestamp(col('joining_date'), lit('yyyy-MM-dd')),
+        try_to_timestamp(col('joining_date'), lit('dd-MM-yyyy')),
+        try_to_timestamp(col('joining_date'), lit('yyyy/MM/dd'))
+    ).cast(DateType())
+)
+df_date.show(truncate=False)
+df_date.printSchema()
+
+print('Cleaning the salary')
+df_salary = df_date.withColumn(
+    'salary',
+    when(trim(col('salary')).rlike('^[0-9]+$'), trim(col('salary')).cast(IntegerType()))\
+    .otherwise(None)
+)
+df_salary.show(truncate=False)
+df_salary.printSchema()
+
+print('Cleaning the depatment')
+df_dept = df_salary.withColumn(
+    'department',
+    when(col('department').rlike(r'^[a-zA-Z]+$'), upper(trim(col('department'))))\
+    .otherwise(None)
+)
+df_dept.show(truncate=False)
+
+print('Removing if all rows with null')
+df_allnull = df_dept.dropna(how='all')
+df_allnull.show(truncate=False)
+
+print('Remove if no Mandatory data')
+mandatory = ['emp_id','name']
+df = df_allnull
+for i in mandatory:
+  df=df.filter(col(i).isNotNull())
+df.show(truncate=False)
+
+print('Deduplication')
+w = Window.partitionBy('emp_id').orderBy(col('email').isNull(),desc('joining_date'))
+df_new =df.withColumn(
+    'row_num',
+    row_number().over(w)
+).filter(col('row_num')==1).drop('row_num')
+df_new.show(truncate=False)
